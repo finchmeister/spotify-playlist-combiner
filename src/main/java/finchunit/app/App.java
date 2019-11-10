@@ -11,17 +11,24 @@ import com.wrapper.spotify.requests.data.playlists.GetListOfUsersPlaylistsReques
 import java.io.IOException;
 import java.util.*;
 
-
 public class App
 {
-    private static final String accessToken = System.getenv("SPOTIFY_ACCESS_TOKEN");
+    private static final String FIRST_PLAYLIST_TO_INCLUDE = "Jays Revokes from Pokes";
+    private static final String LAST_PLAYLIST_TO_INCLUDE = "Soaked in Smoke";
+    private static final String USER_NAME = "thefinchmeister";
+
+    private static final String PLAYLIST_ID_TO_GO_ON_THE_BEAST = "3OsBd103JuT9XxOtyfwmfO";
+    private static final String PLAYLIST_ID_THE_BEAST = "0fl9tBdvQbObUre4IG8cXy";
+    private static final String PLAYLIST_ID_THE_BEAST_COPY = "6ITZgA7oZvcu0KgkXfYDjk";
+
+    private static final String SPOTIFY_ACCESS_TOKEN = System.getenv("SPOTIFY_ACCESS_TOKEN");
     private static final SpotifyApi spotifyApi = new SpotifyApi.Builder()
-            .setAccessToken(accessToken)
+            .setAccessToken(SPOTIFY_ACCESS_TOKEN)
             .build();
 
     public static void main( String[] args )
     {
-        String masterPlaylistId = "6ITZgA7oZvcu0KgkXfYDjk";
+        String masterPlaylistId = PLAYLIST_ID_THE_BEAST_COPY;
 
         List<PlaylistSimplified> pokerPlaylists = getPokerPlaylists();
 
@@ -30,9 +37,10 @@ public class App
         Map<String, Integer> duplicateOffenders = new HashMap<>();
 
         List<PlaylistTrack> playlistTracks;
+        List<PlaylistTrack> playlistTracksToAdd = new ArrayList<>();
         String userId;
         for (PlaylistSimplified playlist : pokerPlaylists) {
-            printTitle(playlist.getName());
+            printTitle(playlist.getName() + " - " + playlist.getId());
             playlistTracks = getAllPlaylistTracks(playlist.getId());
             for (PlaylistTrack playlistTrack : playlistTracks) {
                 if (isTrackInPlayList(playlistTrack, masterPlaylistTracks)) {
@@ -44,6 +52,7 @@ public class App
                 } else {
                     // Add to master playlist
                     System.out.print("Add to playlist");
+                    playlistTracksToAdd.add(playlistTrack);
                 }
                 System.out.println(getTrackInfo(playlistTrack.getTrack()));
             }
@@ -51,6 +60,31 @@ public class App
         printTitle("Duplicates");
         for (Map.Entry<String, Integer> dupesBy : duplicateOffenders.entrySet()) {
             System.out.println(String.format("%s: %d", dupesBy.getKey(), dupesBy.getValue()));
+        }
+
+        String newPlaylistId = PLAYLIST_ID_TO_GO_ON_THE_BEAST;
+
+        addPlaylistTracks(newPlaylistId, playlistTracksToAdd);
+    }
+
+    private static void addPlaylistTracks(String playlistId, List<PlaylistTrack> playlistTracks)
+    {
+        System.out.println("About to add " + playlistTracks.size() + " tracks to the playlist");
+        String[] urisToAddToPlaylist = new String[playlistTracks.size()];
+        for (int i = 0; i < playlistTracks.size(); i++) {
+            urisToAddToPlaylist[i] = playlistTracks.get(i).getTrack().getUri();
+        }
+
+        try {
+            int chunk = 50;
+            int currentChunkSize;
+            for (int i = 0; i < urisToAddToPlaylist.length; i += chunk){
+                spotifyApi.addTracksToPlaylist(playlistId, Arrays.copyOfRange(urisToAddToPlaylist, i, Math.min(urisToAddToPlaylist.length, i+chunk))).build().execute();
+                currentChunkSize = Math.min(urisToAddToPlaylist.length, i+chunk) - i;
+                System.out.println("Adding " + currentChunkSize + " tracks");
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -65,15 +99,20 @@ public class App
 
     private static void printTitle(String title)
     {
-        System.out.println("=======================");
+        String banner = new String(new char[title.length()]).replace("\0", "=");
+        System.out.println(banner);
         System.out.println(title);
-        System.out.println("=======================");
+        System.out.println(banner);
     }
 
-    private static boolean isTrackInPlayList(PlaylistTrack playlistTrack, List<PlaylistTrack> playlistTracks)
+    private static boolean isTrackInPlayList(PlaylistTrack playlistTrack, List<PlaylistTrack> existingPlaylistTracks)
     {
-        for (PlaylistTrack exisitingPlaylistTrack : playlistTracks) {
-            if (playlistTrack.getTrack().getId().equals(exisitingPlaylistTrack.getTrack().getId())) {
+        for (PlaylistTrack existingPlaylistTrack : existingPlaylistTracks) {
+            if (playlistTrack.getTrack().getId().equals(existingPlaylistTrack.getTrack().getId())) {
+                return true;
+            }
+            // Consider tracks with the same name and artist as dupes
+            if (getTrackInfo(playlistTrack.getTrack()).equals(getTrackInfo(existingPlaylistTrack.getTrack()))) {
                 return true;
             }
         }
@@ -116,7 +155,7 @@ public class App
 
         // TODO do not hard code limit & offset
         final GetListOfUsersPlaylistsRequest getListOfUsersPlaylistsRequest = spotifyApi
-                .getListOfUsersPlaylists("thefinchmeister")
+                .getListOfUsersPlaylists(USER_NAME)
                 .limit(50)
                 .offset(45)
                 .build();
@@ -128,7 +167,7 @@ public class App
 
             boolean isPokerPlaylist = false;
             for (PlaylistSimplified playlist : playlistSimplifiedPaging.getItems()) {
-                if (playlist.getName().equals("Mistletokes")) { // TODO do not hard code first playlist
+                if (playlist.getName().equals(FIRST_PLAYLIST_TO_INCLUDE)) {
                     isPokerPlaylist = true;
                 }
 
@@ -136,7 +175,7 @@ public class App
                     pokerPlaylists.add(playlist);
                 }
 
-                if (playlist.getName().equals("The Bloat from Pokes")) {
+                if (playlist.getName().equals(LAST_PLAYLIST_TO_INCLUDE)) {
                     break;
                 }
             }
